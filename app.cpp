@@ -3,6 +3,8 @@
 #include <string>
 #include <iomanip>
 #include <map>
+#include <sstream>
+#include <ctime>
 
 using namespace std;
 
@@ -27,6 +29,38 @@ private:
     vector<Income> incomes;
     map<string, double> budgetLimits;
     map<string, double> spent;
+    map<string, double> monthlyBudget;
+
+    string getMonth(const string &date) const
+    {
+        return date.substr(0, 7);
+    }
+
+    double getTotalAmountForCategory(const string &category, bool isExpense) const
+    {
+        double total = 0;
+        if (isExpense)
+        {
+            for (const auto &expense : expenses)
+            {
+                if (expense.category == category)
+                {
+                    total += expense.amount;
+                }
+            }
+        }
+        else
+        {
+            for (const auto &income : incomes)
+            {
+                if (income.source == category)
+                {
+                    total += income.amount;
+                }
+            }
+        }
+        return total;
+    }
 
 public:
     void addExpense(double amount, const string &category, const string &date)
@@ -34,6 +68,8 @@ public:
         Expense newExpense = {amount, category, date};
         expenses.push_back(newExpense);
         spent[category] += amount;
+        string month = getMonth(date);
+        monthlyBudget[month] += amount;
         cout << "Expense added successfully." << endl;
     }
 
@@ -56,6 +92,8 @@ public:
     {
         Income newIncome = {amount, source, date};
         incomes.push_back(newIncome);
+        string month = getMonth(date);
+        monthlyBudget[month] += amount;
         cout << "Income added successfully." << endl;
     }
 
@@ -124,6 +162,60 @@ public:
         cout << "Total Expenses: " << fixed << setprecision(2) << totalExpenses << endl;
         cout << "Remaining Budget: " << fixed << setprecision(2) << (totalBudget - totalSpent) << endl;
     }
+
+    void viewExpenseByCategory(const string &category) const
+    {
+        bool found = false;
+        for (const auto &expense : expenses)
+        {
+            if (expense.category == category)
+            {
+                cout << "Amount: " << fixed << setprecision(2) << expense.amount
+                     << ", Date: " << expense.date << endl;
+                found = true;
+            }
+        }
+        if (!found)
+        {
+            cout << "No expenses found for category: " << category << endl;
+        }
+    }
+
+    void viewIncomeBySource(const string &source) const
+    {
+        bool found = false;
+        for (const auto &income : incomes)
+        {
+            if (income.source == source)
+            {
+                cout << "Amount: " << fixed << setprecision(2) << income.amount
+                     << ", Date: " << income.date << endl;
+                found = true;
+            }
+        }
+        if (!found)
+        {
+            cout << "No income found from source: " << source << endl;
+        }
+    }
+
+    void trackMonthlyBudget() const
+    {
+        cout << left << setw(10) << "Month" << setw(15) << "Income" << setw(15) << "Expenses" << endl;
+        map<string, double> monthlyIncome;
+        for (const auto &income : incomes)
+        {
+            string month = getMonth(income.date);
+            monthlyIncome[month] += income.amount;
+        }
+        for (const auto &[month, income] : monthlyIncome)
+        {
+            double expenses = monthlyBudget.at(month);
+            cout << left << setw(10) << month
+                 << setw(15) << fixed << setprecision(2) << income
+                 << setw(15) << expenses << endl;
+        }
+    }
 };
 
 int main()
@@ -142,7 +234,10 @@ int main()
         cout << "5. Set Budget" << endl;
         cout << "6. Track Budget" << endl;
         cout << "7. Generate Summary Report" << endl;
-        cout << "8. Exit" << endl;
+        cout << "8. View Expense by Category" << endl;
+        cout << "9. View Income by Source" << endl;
+        cout << "10. Track Monthly Budget" << endl;
+        cout << "11. Exit" << endl;
         cout << "Enter your choice: ";
         cin >> choice;
         cin.ignore();
@@ -189,6 +284,19 @@ int main()
             manager.generateSummaryReport();
             break;
         case 8:
+            cout << "Enter category to view expenses: ";
+            getline(cin, category);
+            manager.viewExpenseByCategory(category);
+            break;
+        case 9:
+            cout << "Enter source to view income: ";
+            getline(cin, source);
+            manager.viewIncomeBySource(source);
+            break;
+        case 10:
+            manager.trackMonthlyBudget();
+            break;
+        case 11:
             cout << "Exiting..." << endl;
             return 0;
         default:
