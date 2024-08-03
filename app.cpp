@@ -7,6 +7,7 @@
 #include <ctime>
 #include <fstream>
 #include <limits>
+#include <algorithm>
 
 using namespace std;
 
@@ -228,7 +229,37 @@ private:
 
     static string getMonth(const string &date)
     {
-        return date.substr(0, 7); // YYYY-MM
+        return date.substr(0, 7);
+    }
+
+    void printExpenses(const vector<Expense> &expensesToPrint) const
+    {
+        if (expensesToPrint.empty())
+        {
+            cout << "No expenses found." << endl;
+            return;
+        }
+        cout << left << setw(10) << "Amount" << setw(20) << "Category" << "Date" << endl;
+        for (const auto &expense : expensesToPrint)
+        {
+            cout << fixed << setprecision(2) << setw(10) << expense.amount
+                 << setw(20) << expense.category << expense.date << endl;
+        }
+    }
+
+    void printIncomes(const vector<Income> &incomesToPrint) const
+    {
+        if (incomesToPrint.empty())
+        {
+            cout << "No income found." << endl;
+            return;
+        }
+        cout << left << setw(10) << "Amount" << setw(20) << "Source" << "Date" << endl;
+        for (const auto &income : incomesToPrint)
+        {
+            cout << fixed << setprecision(2) << setw(10) << income.amount
+                 << setw(20) << income.source << income.date << endl;
+        }
     }
 
 public:
@@ -261,17 +292,7 @@ public:
 
     void listExpenses() const
     {
-        if (expenses.empty())
-        {
-            cout << "No expenses found." << endl;
-            return;
-        }
-        cout << left << setw(10) << "Amount" << setw(20) << "Category" << "Date" << endl;
-        for (const auto &expense : expenses)
-        {
-            cout << fixed << setprecision(2) << setw(10) << expense.amount
-                 << setw(20) << expense.category << expense.date << endl;
-        }
+        printExpenses(expenses);
     }
 
     void addIncome(double amount, const string &source, const string &date)
@@ -294,17 +315,93 @@ public:
 
     void listIncomes() const
     {
-        if (incomes.empty())
+        printIncomes(incomes);
+    }
+
+    void updateExpense(size_t index, double newAmount, const string &newCategory, const string &newDate)
+    {
+        if (index >= expenses.size())
         {
-            cout << "No income found." << endl;
+            cerr << "Error: Invalid expense index." << endl;
             return;
         }
-        cout << left << setw(10) << "Amount" << setw(20) << "Source" << "Date" << endl;
-        for (const auto &income : incomes)
+        if (!validateAmount(newAmount))
         {
-            cout << fixed << setprecision(2) << setw(10) << income.amount
-                 << setw(20) << income.source << income.date << endl;
+            cerr << "Error: Invalid amount." << endl;
+            return;
         }
+        if (!validateDate(newDate))
+        {
+            cerr << "Error: Invalid date format. Use YYYY-MM-DD." << endl;
+            return;
+        }
+        Expense &expense = expenses[index];
+        string oldCategory = expense.category;
+        string oldDate = expense.date;
+        expense.amount = newAmount;
+        expense.category = newCategory;
+        expense.date = newDate;
+        spent[oldCategory] -= expense.amount;
+        spent[newCategory] += expense.amount;
+        string oldMonth = getMonth(oldDate);
+        string newMonth = getMonth(newDate);
+        monthlyBudget[oldMonth] -= expense.amount;
+        monthlyBudget[newMonth] += expense.amount;
+        saveData();
+        cout << "Expense updated successfully." << endl;
+    }
+
+    void deleteExpense(size_t index)
+    {
+        if (index >= expenses.size())
+        {
+            cerr << "Error: Invalid expense index." << endl;
+            return;
+        }
+        const Expense &expense = expenses[index];
+        spent[expense.category] -= expense.amount;
+        string month = getMonth(expense.date);
+        monthlyBudget[month] -= expense.amount;
+        expenses.erase(expenses.begin() + index);
+        saveData();
+        cout << "Expense deleted successfully." << endl;
+    }
+
+    void updateIncome(size_t index, double newAmount, const string &newSource, const string &newDate)
+    {
+        if (index >= incomes.size())
+        {
+            cerr << "Error: Invalid income index." << endl;
+            return;
+        }
+        if (!validateAmount(newAmount))
+        {
+            cerr << "Error: Invalid amount." << endl;
+            return;
+        }
+        if (!validateDate(newDate))
+        {
+            cerr << "Error: Invalid date format. Use YYYY-MM-DD." << endl;
+            return;
+        }
+        Income &income = incomes[index];
+        income.amount = newAmount;
+        income.source = newSource;
+        income.date = newDate;
+        saveData();
+        cout << "Income updated successfully." << endl;
+    }
+
+    void deleteIncome(size_t index)
+    {
+        if (index >= incomes.size())
+        {
+            cerr << "Error: Invalid income index." << endl;
+            return;
+        }
+        incomes.erase(incomes.begin() + index);
+        saveData();
+        cout << "Income deleted successfully." << endl;
     }
 
     void setBudget(const string &category, double amount)
@@ -357,38 +454,28 @@ public:
 
     void viewExpenseByCategory(const string &category) const
     {
-        bool found = false;
+        vector<Expense> filteredExpenses;
         for (const auto &expense : expenses)
         {
             if (expense.category == category)
             {
-                cout << fixed << setprecision(2) << "Amount: " << expense.amount
-                     << ", Date: " << expense.date << endl;
-                found = true;
+                filteredExpenses.push_back(expense);
             }
         }
-        if (!found)
-        {
-            cout << "No expenses found for category '" << category << "'." << endl;
-        }
+        printExpenses(filteredExpenses);
     }
 
     void viewIncomeBySource(const string &source) const
     {
-        bool found = false;
+        vector<Income> filteredIncomes;
         for (const auto &income : incomes)
         {
             if (income.source == source)
             {
-                cout << fixed << setprecision(2) << "Amount: " << income.amount
-                     << ", Date: " << income.date << endl;
-                found = true;
+                filteredIncomes.push_back(income);
             }
         }
-        if (!found)
-        {
-            cout << "No income found from source '" << source << "'." << endl;
-        }
+        printIncomes(filteredIncomes);
     }
 
     void trackMonthlyBudget() const
@@ -443,20 +530,25 @@ public:
     {
         while (true)
         {
-            cout << "Personal Budget Manager" << endl;
-            cout << "1. Add Expense" << endl;
-            cout << "2. List Expenses" << endl;
-            cout << "3. Add Income" << endl;
-            cout << "4. List Income" << endl;
-            cout << "5. Set Budget" << endl;
-            cout << "6. Track Budget" << endl;
-            cout << "7. Generate Summary Report" << endl;
-            cout << "8. View Expense by Category" << endl;
-            cout << "9. View Income by Source" << endl;
-            cout << "10. Track Monthly Budget" << endl;
-            cout << "11. Add User Profile" << endl;
-            cout << "12. Switch User Profile" << endl;
-            cout << "0. Exit" << endl;
+            cout << "\nPersonal Budget Manager\n";
+            cout << "1. Add Expense\n";
+            cout << "2. List Expenses\n";
+            cout << "3. Update Expense\n";
+            cout << "4. Delete Expense\n";
+            cout << "5. Add Income\n";
+            cout << "6. List Income\n";
+            cout << "7. Update Income\n";
+            cout << "8. Delete Income\n";
+            cout << "9. Set Budget\n";
+            cout << "10. Track Budget\n";
+            cout << "11. Generate Summary Report\n";
+            cout << "12. View Expense by Category\n";
+            cout << "13. View Income by Source\n";
+            cout << "14. Track Monthly Budget\n";
+            cout << "15. Add User Profile\n";
+            cout << "16. Switch User Profile\n";
+            cout << "0. Exit\n";
+            cout << "Choose an option: ";
             int choice;
             cin >> choice;
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -479,6 +571,28 @@ public:
                 break;
             case 3:
             {
+                size_t index;
+                double newAmount;
+                string newCategory, newDate;
+                cout << "Enter expense index, new amount, new category, and new date (YYYY-MM-DD): ";
+                cin >> index;
+                cin >> newAmount;
+                cin.ignore();
+                getline(cin, newCategory);
+                getline(cin, newDate);
+                updateExpense(index, newAmount, newCategory, newDate);
+                break;
+            }
+            case 4:
+            {
+                size_t index;
+                cout << "Enter expense index to delete: ";
+                cin >> index;
+                deleteExpense(index);
+                break;
+            }
+            case 5:
+            {
                 double amount;
                 string source, date;
                 cout << "Enter amount, source, and date (YYYY-MM-DD): ";
@@ -489,10 +603,32 @@ public:
                 addIncome(amount, source, date);
                 break;
             }
-            case 4:
+            case 6:
                 listIncomes();
                 break;
-            case 5:
+            case 7:
+            {
+                size_t index;
+                double newAmount;
+                string newSource, newDate;
+                cout << "Enter income index, new amount, new source, and new date (YYYY-MM-DD): ";
+                cin >> index;
+                cin >> newAmount;
+                cin.ignore();
+                getline(cin, newSource);
+                getline(cin, newDate);
+                updateIncome(index, newAmount, newSource, newDate);
+                break;
+            }
+            case 8:
+            {
+                size_t index;
+                cout << "Enter income index to delete: ";
+                cin >> index;
+                deleteIncome(index);
+                break;
+            }
+            case 9:
             {
                 string category;
                 double amount;
@@ -503,53 +639,51 @@ public:
                 setBudget(category, amount);
                 break;
             }
-            case 6:
+            case 10:
                 trackBudget();
                 break;
-            case 7:
+            case 11:
                 generateSummaryReport();
                 break;
-            case 8:
+            case 12:
             {
                 string category;
                 cout << "Enter category to view expenses: ";
-                cin.ignore();
                 getline(cin, category);
                 viewExpenseByCategory(category);
                 break;
             }
-            case 9:
+            case 13:
             {
                 string source;
                 cout << "Enter source to view income: ";
-                cin.ignore();
                 getline(cin, source);
                 viewIncomeBySource(source);
                 break;
             }
-            case 10:
+            case 14:
                 trackMonthlyBudget();
                 break;
-            case 11:
+            case 15:
             {
                 string username;
                 cout << "Enter new username: ";
-                cin >> username;
+                getline(cin, username);
                 addUserProfile(username);
                 break;
             }
-            case 12:
+            case 16:
             {
                 string username;
                 cout << "Enter username to switch to: ";
-                cin >> username;
+                getline(cin, username);
                 switchUserProfile(username);
                 break;
             }
             case 0:
                 return;
             default:
-                cerr << "Error: Invalid choice. Please try again." << endl;
+                cout << "Invalid option. Please try again." << endl;
             }
         }
     }
@@ -557,11 +691,11 @@ public:
 
 int main()
 {
-    BudgetManager bm;
+    BudgetManager manager;
     string username;
-    cout << "Enter username to start: ";
-    cin >> username;
-    bm.setUser(username);
-    bm.run();
+    cout << "Enter your username: ";
+    getline(cin, username);
+    manager.setUser(username);
+    manager.run();
     return 0;
 }
