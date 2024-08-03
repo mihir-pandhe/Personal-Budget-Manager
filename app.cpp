@@ -5,6 +5,7 @@
 #include <map>
 #include <sstream>
 #include <ctime>
+#include <fstream>
 
 using namespace std;
 
@@ -30,39 +31,141 @@ private:
     map<string, double> budgetLimits;
     map<string, double> spent;
     map<string, double> monthlyBudget;
+    string currentUser;
 
-    string getMonth(const string &date) const
+    void saveData() const
     {
-        return date.substr(0, 7);
+        ofstream outFile(currentUser + ".dat");
+        if (!outFile)
+        {
+            cerr << "Error: Unable to open file for saving data." << endl;
+            return;
+        }
+        outFile << expenses.size() << endl;
+        for (const auto &expense : expenses)
+        {
+            outFile << expense.amount << "," << expense.category << "," << expense.date << endl;
+        }
+        outFile << incomes.size() << endl;
+        for (const auto &income : incomes)
+        {
+            outFile << income.amount << "," << income.source << "," << income.date << endl;
+        }
+        outFile << budgetLimits.size() << endl;
+        for (const auto &[category, limit] : budgetLimits)
+        {
+            outFile << category << "," << limit << endl;
+        }
+        outFile << spent.size() << endl;
+        for (const auto &[category, amount] : spent)
+        {
+            outFile << category << "," << amount << endl;
+        }
+        outFile << monthlyBudget.size() << endl;
+        for (const auto &[month, amount] : monthlyBudget)
+        {
+            outFile << month << "," << amount << endl;
+        }
+        outFile.close();
     }
 
-    double getTotalAmountForCategory(const string &category, bool isExpense) const
+    void loadData()
     {
-        double total = 0;
-        if (isExpense)
+        ifstream inFile(currentUser + ".dat");
+        if (!inFile)
         {
-            for (const auto &expense : expenses)
-            {
-                if (expense.category == category)
-                {
-                    total += expense.amount;
-                }
-            }
+            cerr << "Error: Unable to open file for loading data." << endl;
+            return;
         }
-        else
+        // Load expenses
+        size_t numExpenses;
+        inFile >> numExpenses;
+        inFile.ignore();
+        expenses.clear();
+        for (size_t i = 0; i < numExpenses; ++i)
         {
-            for (const auto &income : incomes)
-            {
-                if (income.source == category)
-                {
-                    total += income.amount;
-                }
-            }
+            Expense expense;
+            string line;
+            getline(inFile, line);
+            stringstream ss(line);
+            getline(ss, line, ',');
+            expense.amount = stod(line);
+            getline(ss, expense.category, ',');
+            getline(ss, expense.date, ',');
+            expenses.push_back(expense);
         }
-        return total;
+        // Load incomes
+        size_t numIncomes;
+        inFile >> numIncomes;
+        inFile.ignore();
+        incomes.clear();
+        for (size_t i = 0; i < numIncomes; ++i)
+        {
+            Income income;
+            string line;
+            getline(inFile, line);
+            stringstream ss(line);
+            getline(ss, line, ',');
+            income.amount = stod(line);
+            getline(ss, income.source, ',');
+            getline(ss, income.date, ',');
+            incomes.push_back(income);
+        }
+        size_t numBudgetLimits;
+        inFile >> numBudgetLimits;
+        inFile.ignore();
+        budgetLimits.clear();
+        for (size_t i = 0; i < numBudgetLimits; ++i)
+        {
+            string line;
+            getline(inFile, line);
+            stringstream ss(line);
+            string category;
+            double limit;
+            getline(ss, category, ',');
+            ss >> limit;
+            budgetLimits[category] = limit;
+        }
+        size_t numSpent;
+        inFile >> numSpent;
+        inFile.ignore();
+        spent.clear();
+        for (size_t i = 0; i < numSpent; ++i)
+        {
+            string line;
+            getline(inFile, line);
+            stringstream ss(line);
+            string category;
+            double amount;
+            getline(ss, category, ',');
+            ss >> amount;
+            spent[category] = amount;
+        }
+        size_t numMonthlyBudget;
+        inFile >> numMonthlyBudget;
+        inFile.ignore();
+        monthlyBudget.clear();
+        for (size_t i = 0; i < numMonthlyBudget; ++i)
+        {
+            string line;
+            getline(inFile, line);
+            stringstream ss(line);
+            string month;
+            double amount;
+            getline(ss, month, ',');
+            ss >> amount;
+            monthlyBudget[month] = amount;
+        }
+        inFile.close();
     }
 
 public:
+    void setUser(const string &username)
+    {
+        currentUser = username;
+        loadData();
+    }
+
     void addExpense(double amount, const string &category, const string &date)
     {
         Expense newExpense = {amount, category, date};
@@ -70,6 +173,7 @@ public:
         spent[category] += amount;
         string month = getMonth(date);
         monthlyBudget[month] += amount;
+        saveData();
         cout << "Expense added successfully." << endl;
     }
 
@@ -94,6 +198,7 @@ public:
         incomes.push_back(newIncome);
         string month = getMonth(date);
         monthlyBudget[month] += amount;
+        saveData();
         cout << "Income added successfully." << endl;
     }
 
@@ -119,6 +224,7 @@ public:
         {
             spent[category] = 0;
         }
+        saveData();
         cout << "Budget set for category '" << category << "' with amount " << amount << endl;
     }
 
@@ -201,106 +307,167 @@ public:
 
     void trackMonthlyBudget() const
     {
-        cout << left << setw(10) << "Month" << setw(15) << "Income" << setw(15) << "Expenses" << endl;
-        map<string, double> monthlyIncome;
-        for (const auto &income : incomes)
+        cout << left << setw(10) << "Month" << "Income" << setw(20) << "Expenses" << "Remaining Budget" << endl;
+        for (const auto &[month, amount] : monthlyBudget)
         {
-            string month = getMonth(income.date);
-            monthlyIncome[month] += income.amount;
-        }
-        for (const auto &[month, income] : monthlyIncome)
-        {
-            double expenses = monthlyBudget.at(month);
+            double totalExpenses = 0;
+            for (const auto &expense : expenses)
+            {
+                if (getMonth(expense.date) == month)
+                {
+                    totalExpenses += expense.amount;
+                }
+            }
+            double remainingBudget = amount - totalExpenses;
             cout << left << setw(10) << month
-                 << setw(15) << fixed << setprecision(2) << income
-                 << setw(15) << expenses << endl;
+                 << fixed << setprecision(2) << setw(20) << amount
+                 << totalExpenses << setw(15) << remainingBudget << endl;
+        }
+    }
+
+    void addUserProfile(const string &username)
+    {
+        currentUser = username;
+        saveData();
+        cout << "User profile added: " << username << endl;
+    }
+
+    bool authenticateUser(const string &username) const
+    {
+        return username == currentUser;
+    }
+
+    void switchUserProfile(const string &username)
+    {
+        if (authenticateUser(username))
+        {
+            currentUser = username;
+            loadData();
+            cout << "Switched to user profile: " << username << endl;
+        }
+        else
+        {
+            cout << "Authentication failed for user: " << username << endl;
+        }
+    }
+
+    static string getMonth(const string &date)
+    {
+        return date.substr(0, 7);
+    }
+
+    void run()
+    {
+        while (true)
+        {
+            cout << "Personal Budget Manager" << endl;
+            cout << "1. Add Expense" << endl;
+            cout << "2. List Expenses" << endl;
+            cout << "3. Add Income" << endl;
+            cout << "4. List Income" << endl;
+            cout << "5. Set Budget" << endl;
+            cout << "6. Track Budget" << endl;
+            cout << "7. Generate Summary Report" << endl;
+            cout << "8. View Expense by Category" << endl;
+            cout << "9. View Income by Source" << endl;
+            cout << "10. Track Monthly Budget" << endl;
+            cout << "11. Add User Profile" << endl;
+            cout << "12. Switch User Profile" << endl;
+            cout << "0. Exit" << endl;
+            int choice;
+            cin >> choice;
+            switch (choice)
+            {
+            case 1:
+            {
+                double amount;
+                string category, date;
+                cout << "Enter amount, category, and date (YYYY-MM-DD): ";
+                cin >> amount >> category >> date;
+                addExpense(amount, category, date);
+                break;
+            }
+            case 2:
+                listExpenses();
+                break;
+            case 3:
+            {
+                double amount;
+                string source, date;
+                cout << "Enter amount, source, and date (YYYY-MM-DD): ";
+                cin >> amount >> source >> date;
+                addIncome(amount, source, date);
+                break;
+            }
+            case 4:
+                listIncomes();
+                break;
+            case 5:
+            {
+                string category;
+                double amount;
+                cout << "Enter category and budget amount: ";
+                cin >> category >> amount;
+                setBudget(category, amount);
+                break;
+            }
+            case 6:
+                trackBudget();
+                break;
+            case 7:
+                generateSummaryReport();
+                break;
+            case 8:
+            {
+                string category;
+                cout << "Enter category to view expenses: ";
+                cin >> category;
+                viewExpenseByCategory(category);
+                break;
+            }
+            case 9:
+            {
+                string source;
+                cout << "Enter source to view income: ";
+                cin >> source;
+                viewIncomeBySource(source);
+                break;
+            }
+            case 10:
+                trackMonthlyBudget();
+                break;
+            case 11:
+            {
+                string username;
+                cout << "Enter new username: ";
+                cin >> username;
+                addUserProfile(username);
+                break;
+            }
+            case 12:
+            {
+                string username;
+                cout << "Enter username to switch to: ";
+                cin >> username;
+                switchUserProfile(username);
+                break;
+            }
+            case 0:
+                return;
+            default:
+                cout << "Invalid choice. Please try again." << endl;
+            }
         }
     }
 };
 
 int main()
 {
-    BudgetManager manager;
-    int choice;
-    double amount;
-    string category, source, date;
-
-    while (true)
-    {
-        cout << "1. Add Expense" << endl;
-        cout << "2. List Expenses" << endl;
-        cout << "3. Add Income" << endl;
-        cout << "4. List Income" << endl;
-        cout << "5. Set Budget" << endl;
-        cout << "6. Track Budget" << endl;
-        cout << "7. Generate Summary Report" << endl;
-        cout << "8. View Expense by Category" << endl;
-        cout << "9. View Income by Source" << endl;
-        cout << "10. Track Monthly Budget" << endl;
-        cout << "11. Exit" << endl;
-        cout << "Enter your choice: ";
-        cin >> choice;
-        cin.ignore();
-
-        switch (choice)
-        {
-        case 1:
-            cout << "Enter amount: ";
-            cin >> amount;
-            cin.ignore();
-            cout << "Enter category: ";
-            getline(cin, category);
-            cout << "Enter date (YYYY-MM-DD): ";
-            getline(cin, date);
-            manager.addExpense(amount, category, date);
-            break;
-        case 2:
-            manager.listExpenses();
-            break;
-        case 3:
-            cout << "Enter amount: ";
-            cin >> amount;
-            cin.ignore();
-            cout << "Enter source: ";
-            getline(cin, source);
-            cout << "Enter date (YYYY-MM-DD): ";
-            getline(cin, date);
-            manager.addIncome(amount, source, date);
-            break;
-        case 4:
-            manager.listIncomes();
-            break;
-        case 5:
-            cout << "Enter category: ";
-            getline(cin, category);
-            cout << "Enter budget amount: ";
-            cin >> amount;
-            manager.setBudget(category, amount);
-            break;
-        case 6:
-            manager.trackBudget();
-            break;
-        case 7:
-            manager.generateSummaryReport();
-            break;
-        case 8:
-            cout << "Enter category to view expenses: ";
-            getline(cin, category);
-            manager.viewExpenseByCategory(category);
-            break;
-        case 9:
-            cout << "Enter source to view income: ";
-            getline(cin, source);
-            manager.viewIncomeBySource(source);
-            break;
-        case 10:
-            manager.trackMonthlyBudget();
-            break;
-        case 11:
-            cout << "Exiting..." << endl;
-            return 0;
-        default:
-            cout << "Invalid choice. Please try again." << endl;
-        }
-    }
+    BudgetManager bm;
+    string username;
+    cout << "Enter username to start: ";
+    cin >> username;
+    bm.setUser(username);
+    bm.run();
+    return 0;
 }
