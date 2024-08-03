@@ -6,6 +6,7 @@
 #include <sstream>
 #include <ctime>
 #include <fstream>
+#include <limits>
 
 using namespace std;
 
@@ -41,31 +42,37 @@ private:
             cerr << "Error: Unable to open file for saving data." << endl;
             return;
         }
+
         outFile << expenses.size() << endl;
         for (const auto &expense : expenses)
         {
             outFile << expense.amount << "," << expense.category << "," << expense.date << endl;
         }
+
         outFile << incomes.size() << endl;
         for (const auto &income : incomes)
         {
             outFile << income.amount << "," << income.source << "," << income.date << endl;
         }
+
         outFile << budgetLimits.size() << endl;
-        for (const auto &[category, limit] : budgetLimits)
+        for (auto it = budgetLimits.begin(); it != budgetLimits.end(); ++it)
         {
-            outFile << category << "," << limit << endl;
+            outFile << it->first << "," << it->second << endl;
         }
+
         outFile << spent.size() << endl;
-        for (const auto &[category, amount] : spent)
+        for (auto it = spent.begin(); it != spent.end(); ++it)
         {
-            outFile << category << "," << amount << endl;
+            outFile << it->first << "," << it->second << endl;
         }
+
         outFile << monthlyBudget.size() << endl;
-        for (const auto &[month, amount] : monthlyBudget)
+        for (auto it = monthlyBudget.begin(); it != monthlyBudget.end(); ++it)
         {
-            outFile << month << "," << amount << endl;
+            outFile << it->first << "," << it->second << endl;
         }
+
         outFile.close();
     }
 
@@ -77,9 +84,13 @@ private:
             cerr << "Error: Unable to open file for loading data." << endl;
             return;
         }
-        // Load expenses
+
         size_t numExpenses;
-        inFile >> numExpenses;
+        if (!(inFile >> numExpenses))
+        {
+            cerr << "Error: Failed to read number of expenses." << endl;
+            return;
+        }
         inFile.ignore();
         expenses.clear();
         for (size_t i = 0; i < numExpenses; ++i)
@@ -88,15 +99,22 @@ private:
             string line;
             getline(inFile, line);
             stringstream ss(line);
-            getline(ss, line, ',');
-            expense.amount = stod(line);
+            if (!(ss >> expense.amount))
+            {
+                cerr << "Error: Failed to read expense amount." << endl;
+                return;
+            }
             getline(ss, expense.category, ',');
             getline(ss, expense.date, ',');
             expenses.push_back(expense);
         }
-        // Load incomes
+
         size_t numIncomes;
-        inFile >> numIncomes;
+        if (!(inFile >> numIncomes))
+        {
+            cerr << "Error: Failed to read number of incomes." << endl;
+            return;
+        }
         inFile.ignore();
         incomes.clear();
         for (size_t i = 0; i < numIncomes; ++i)
@@ -105,14 +123,22 @@ private:
             string line;
             getline(inFile, line);
             stringstream ss(line);
-            getline(ss, line, ',');
-            income.amount = stod(line);
+            if (!(ss >> income.amount))
+            {
+                cerr << "Error: Failed to read income amount." << endl;
+                return;
+            }
             getline(ss, income.source, ',');
             getline(ss, income.date, ',');
             incomes.push_back(income);
         }
+
         size_t numBudgetLimits;
-        inFile >> numBudgetLimits;
+        if (!(inFile >> numBudgetLimits))
+        {
+            cerr << "Error: Failed to read number of budget limits." << endl;
+            return;
+        }
         inFile.ignore();
         budgetLimits.clear();
         for (size_t i = 0; i < numBudgetLimits; ++i)
@@ -122,12 +148,20 @@ private:
             stringstream ss(line);
             string category;
             double limit;
-            getline(ss, category, ',');
-            ss >> limit;
+            if (!(getline(ss, category, ',') && (ss >> limit)))
+            {
+                cerr << "Error: Failed to read budget limit." << endl;
+                return;
+            }
             budgetLimits[category] = limit;
         }
+
         size_t numSpent;
-        inFile >> numSpent;
+        if (!(inFile >> numSpent))
+        {
+            cerr << "Error: Failed to read number of spent entries." << endl;
+            return;
+        }
         inFile.ignore();
         spent.clear();
         for (size_t i = 0; i < numSpent; ++i)
@@ -137,12 +171,20 @@ private:
             stringstream ss(line);
             string category;
             double amount;
-            getline(ss, category, ',');
-            ss >> amount;
+            if (!(getline(ss, category, ',') && (ss >> amount)))
+            {
+                cerr << "Error: Failed to read spent amount." << endl;
+                return;
+            }
             spent[category] = amount;
         }
+
         size_t numMonthlyBudget;
-        inFile >> numMonthlyBudget;
+        if (!(inFile >> numMonthlyBudget))
+        {
+            cerr << "Error: Failed to read number of monthly budgets." << endl;
+            return;
+        }
         inFile.ignore();
         monthlyBudget.clear();
         for (size_t i = 0; i < numMonthlyBudget; ++i)
@@ -152,11 +194,41 @@ private:
             stringstream ss(line);
             string month;
             double amount;
-            getline(ss, month, ',');
-            ss >> amount;
+            if (!(getline(ss, month, ',') && (ss >> amount)))
+            {
+                cerr << "Error: Failed to read monthly budget." << endl;
+                return;
+            }
             monthlyBudget[month] = amount;
         }
+
         inFile.close();
+    }
+
+    bool validateDate(const string &date) const
+    {
+        if (date.length() != 10 || date[4] != '-' || date[7] != '-')
+        {
+            return false;
+        }
+        for (char c : date)
+        {
+            if (!isdigit(c) && c != '-')
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool validateAmount(double amount) const
+    {
+        return amount > 0;
+    }
+
+    static string getMonth(const string &date)
+    {
+        return date.substr(0, 7); // YYYY-MM
     }
 
 public:
@@ -168,6 +240,16 @@ public:
 
     void addExpense(double amount, const string &category, const string &date)
     {
+        if (!validateAmount(amount))
+        {
+            cerr << "Error: Invalid amount." << endl;
+            return;
+        }
+        if (!validateDate(date))
+        {
+            cerr << "Error: Invalid date format. Use YYYY-MM-DD." << endl;
+            return;
+        }
         Expense newExpense = {amount, category, date};
         expenses.push_back(newExpense);
         spent[category] += amount;
@@ -181,23 +263,31 @@ public:
     {
         if (expenses.empty())
         {
-            cout << "No expenses to display." << endl;
+            cout << "No expenses found." << endl;
             return;
         }
-        cout << left << setw(15) << "Amount" << setw(20) << "Category" << "Date" << endl;
+        cout << left << setw(10) << "Amount" << setw(20) << "Category" << "Date" << endl;
         for (const auto &expense : expenses)
         {
-            cout << fixed << setprecision(2) << setw(15) << expense.amount
+            cout << fixed << setprecision(2) << setw(10) << expense.amount
                  << setw(20) << expense.category << expense.date << endl;
         }
     }
 
     void addIncome(double amount, const string &source, const string &date)
     {
+        if (!validateAmount(amount))
+        {
+            cerr << "Error: Invalid amount." << endl;
+            return;
+        }
+        if (!validateDate(date))
+        {
+            cerr << "Error: Invalid date format. Use YYYY-MM-DD." << endl;
+            return;
+        }
         Income newIncome = {amount, source, date};
         incomes.push_back(newIncome);
-        string month = getMonth(date);
-        monthlyBudget[month] += amount;
         saveData();
         cout << "Income added successfully." << endl;
     }
@@ -206,67 +296,63 @@ public:
     {
         if (incomes.empty())
         {
-            cout << "No incomes to display." << endl;
+            cout << "No income found." << endl;
             return;
         }
-        cout << left << setw(15) << "Amount" << setw(20) << "Source" << "Date" << endl;
+        cout << left << setw(10) << "Amount" << setw(20) << "Source" << "Date" << endl;
         for (const auto &income : incomes)
         {
-            cout << fixed << setprecision(2) << setw(15) << income.amount
+            cout << fixed << setprecision(2) << setw(10) << income.amount
                  << setw(20) << income.source << income.date << endl;
         }
     }
 
     void setBudget(const string &category, double amount)
     {
-        budgetLimits[category] = amount;
-        if (spent.find(category) == spent.end())
+        if (!validateAmount(amount))
         {
-            spent[category] = 0;
+            cerr << "Error: Invalid budget amount." << endl;
+            return;
         }
+        budgetLimits[category] = amount;
         saveData();
-        cout << "Budget set for category '" << category << "' with amount " << amount << endl;
+        cout << "Budget set successfully." << endl;
     }
 
     void trackBudget() const
     {
-        cout << left << setw(20) << "Category" << setw(15) << "Budget" << setw(15) << "Spent" << "Remaining" << endl;
-        for (const auto &[category, budget] : budgetLimits)
+        cout << left << setw(20) << "Category" << "Budget" << setw(15) << "Spent" << "Remaining" << endl;
+        for (auto it = budgetLimits.begin(); it != budgetLimits.end(); ++it)
         {
+            const string &category = it->first;
+            double budget = it->second;
             double spentAmount = spent.at(category);
             double remaining = budget - spentAmount;
             cout << left << setw(20) << category
-                 << setw(15) << fixed << setprecision(2) << budget
+                 << fixed << setprecision(2) << setw(15) << budget
                  << setw(15) << spentAmount
-                 << remaining << endl;
+                 << setw(15) << remaining << endl;
         }
     }
 
     void generateSummaryReport() const
     {
         double totalIncome = 0;
-        double totalExpenses = 0;
         for (const auto &income : incomes)
         {
             totalIncome += income.amount;
         }
+
+        double totalExpenses = 0;
         for (const auto &expense : expenses)
         {
             totalExpenses += expense.amount;
         }
 
-        double totalBudget = 0;
-        double totalSpent = 0;
-        for (const auto &[category, budget] : budgetLimits)
-        {
-            totalBudget += budget;
-            totalSpent += spent.at(category);
-        }
-
-        cout << "Summary Report:" << endl;
-        cout << "Total Income: " << fixed << setprecision(2) << totalIncome << endl;
-        cout << "Total Expenses: " << fixed << setprecision(2) << totalExpenses << endl;
-        cout << "Remaining Budget: " << fixed << setprecision(2) << (totalBudget - totalSpent) << endl;
+        cout << fixed << setprecision(2);
+        cout << "Total Income: " << totalIncome << endl;
+        cout << "Total Expenses: " << totalExpenses << endl;
+        cout << "Remaining Budget: " << totalIncome - totalExpenses << endl;
     }
 
     void viewExpenseByCategory(const string &category) const
@@ -276,14 +362,14 @@ public:
         {
             if (expense.category == category)
             {
-                cout << "Amount: " << fixed << setprecision(2) << expense.amount
+                cout << fixed << setprecision(2) << "Amount: " << expense.amount
                      << ", Date: " << expense.date << endl;
                 found = true;
             }
         }
         if (!found)
         {
-            cout << "No expenses found for category: " << category << endl;
+            cout << "No expenses found for category '" << category << "'." << endl;
         }
     }
 
@@ -294,22 +380,24 @@ public:
         {
             if (income.source == source)
             {
-                cout << "Amount: " << fixed << setprecision(2) << income.amount
+                cout << fixed << setprecision(2) << "Amount: " << income.amount
                      << ", Date: " << income.date << endl;
                 found = true;
             }
         }
         if (!found)
         {
-            cout << "No income found from source: " << source << endl;
+            cout << "No income found from source '" << source << "'." << endl;
         }
     }
 
     void trackMonthlyBudget() const
     {
-        cout << left << setw(10) << "Month" << "Income" << setw(20) << "Expenses" << "Remaining Budget" << endl;
-        for (const auto &[month, amount] : monthlyBudget)
+        cout << left << setw(10) << "Month" << "Budget" << setw(20) << "Expenses" << "Remaining Budget" << endl;
+        for (auto it = monthlyBudget.begin(); it != monthlyBudget.end(); ++it)
         {
+            const string &month = it->first;
+            double budget = it->second;
             double totalExpenses = 0;
             for (const auto &expense : expenses)
             {
@@ -318,9 +406,9 @@ public:
                     totalExpenses += expense.amount;
                 }
             }
-            double remainingBudget = amount - totalExpenses;
+            double remainingBudget = budget - totalExpenses;
             cout << left << setw(10) << month
-                 << fixed << setprecision(2) << setw(20) << amount
+                 << fixed << setprecision(2) << setw(20) << budget
                  << totalExpenses << setw(15) << remainingBudget << endl;
         }
     }
@@ -347,13 +435,8 @@ public:
         }
         else
         {
-            cout << "Authentication failed for user: " << username << endl;
+            cerr << "Error: Authentication failed for user: " << username << endl;
         }
-    }
-
-    static string getMonth(const string &date)
-    {
-        return date.substr(0, 7);
     }
 
     void run()
@@ -376,6 +459,7 @@ public:
             cout << "0. Exit" << endl;
             int choice;
             cin >> choice;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
             switch (choice)
             {
             case 1:
@@ -383,7 +467,10 @@ public:
                 double amount;
                 string category, date;
                 cout << "Enter amount, category, and date (YYYY-MM-DD): ";
-                cin >> amount >> category >> date;
+                cin >> amount;
+                cin.ignore();
+                getline(cin, category);
+                getline(cin, date);
                 addExpense(amount, category, date);
                 break;
             }
@@ -395,7 +482,10 @@ public:
                 double amount;
                 string source, date;
                 cout << "Enter amount, source, and date (YYYY-MM-DD): ";
-                cin >> amount >> source >> date;
+                cin >> amount;
+                cin.ignore();
+                getline(cin, source);
+                getline(cin, date);
                 addIncome(amount, source, date);
                 break;
             }
@@ -407,7 +497,9 @@ public:
                 string category;
                 double amount;
                 cout << "Enter category and budget amount: ";
-                cin >> category >> amount;
+                cin.ignore();
+                getline(cin, category);
+                cin >> amount;
                 setBudget(category, amount);
                 break;
             }
@@ -421,7 +513,8 @@ public:
             {
                 string category;
                 cout << "Enter category to view expenses: ";
-                cin >> category;
+                cin.ignore();
+                getline(cin, category);
                 viewExpenseByCategory(category);
                 break;
             }
@@ -429,7 +522,8 @@ public:
             {
                 string source;
                 cout << "Enter source to view income: ";
-                cin >> source;
+                cin.ignore();
+                getline(cin, source);
                 viewIncomeBySource(source);
                 break;
             }
@@ -455,7 +549,7 @@ public:
             case 0:
                 return;
             default:
-                cout << "Invalid choice. Please try again." << endl;
+                cerr << "Error: Invalid choice. Please try again." << endl;
             }
         }
     }
